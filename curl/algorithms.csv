@@ -1,0 +1,17 @@
+
+name,function,type
+kyber512,kem,pqc
+kyber768,kem,pqc
+kyber1024,kem,pqc
+x25519_kyber512,kem,hybrid
+x25519_kyber768,kem,hybrid
+X25519,kem,trad
+falcon512,sig,pqc
+falcon1024,sig,pqc
+p256_falcon512,sig,hybrid
+p512_falcon1024,sig,hybrid
+dilithium2,sig,pqc
+dilithium3,sig,pqc
+p256_dilithium2,sig,hybrid
+p384_dilithium3,sig,hybrid
+ED25519,sig,trad

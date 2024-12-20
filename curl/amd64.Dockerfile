@@ -25,7 +25,7 @@ ARG DEFAULT_GROUPS="x25519:x448:kyber512:p256_kyber512:kyber768:p384_kyber768:ky
 ARG MAKE_DEFINES="-j 4"
 
 
-FROM alpine:3.11 as intermediate
+FROM arm32v7/alpine:3.11 as intermediate
 # Take in all global args
 ARG LIBOQS_TAG
 ARG OQSPROVIDER_TAG
@@ -43,11 +43,11 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apk update && apk upgrade
 
 # Get all software packages required for builing all components:
-RUN apk add build-base linux-headers \
+RUN apk add --no-cache build-base linux-headers \
             libtool automake autoconf cmake ninja \
             make \
             openssl openssl-dev \
-            git wget
+            git wget bash
 
 # get all sources
 WORKDIR /opt
@@ -62,7 +62,7 @@ RUN mkdir build && cd build && cmake -G"Ninja" .. ${LIBOQS_BUILD_DEFINES} -DCMAK
 
 # build OpenSSL3
 WORKDIR /opt/openssl
-RUN LDFLAGS="-Wl,-rpath -Wl,${INSTALLDIR}/lib64" ./config shared --prefix=${INSTALLDIR} && \
+RUN LDFLAGS="-Wl,-rpath -Wl,${INSTALLDIR}/lib" ./config shared --prefix=${INSTALLDIR} && \
     make ${MAKE_DEFINES} && make install_sw install_ssldirs;
 
 # set path to use 'new' openssl. Dyn libs have been properly linked in to match
@@ -70,7 +70,7 @@ ENV PATH="${INSTALLDIR}/bin:${PATH}"
 
 # build & install provider (and activate by default)
 WORKDIR /opt/oqs-provider
-RUN ln -s ../openssl . && cmake -DOPENSSL_ROOT_DIR=${INSTALLDIR} -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=${INSTALLDIR} -S . -B _build && cmake --build _build  && cp _build/lib/oqsprovider.so ${INSTALLDIR}/lib64/ossl-modules && sed -i "s/default = default_sect/default = default_sect\noqsprovider = oqsprovider_sect/g" /opt/oqssa/ssl/openssl.cnf && sed -i "s/\[default_sect\]/\[default_sect\]\nactivate = 1\n\[oqsprovider_sect\]\nactivate = 1\n/g" /opt/oqssa/ssl/openssl.cnf && sed -i "s/providers = provider_sect/providers = provider_sect\nssl_conf = ssl_sect\n\n\[ssl_sect\]\nsystem_default = system_default_sect\n\n\[system_default_sect\]\nGroups = \$ENV\:\:DEFAULT_GROUPS\n/g" /opt/oqssa/ssl/openssl.cnf && sed -i "s/\# Use this in order to automatically load providers/\# Set default KEM groups if not set via environment variable\nKDEFAULT_GROUPS = $DEFAULT_GROUPS\n\n# Use this in order to automatically load providers/g" /opt/oqssa/ssl/openssl.cnf && sed -i "s/HOME\t\t\t= ./HOME\t\t= .\nDEFAULT_GROUPS\t= ${DEFAULT_GROUPS}/g" /opt/oqssa/ssl/openssl.cnf
+RUN ln -s ../openssl . && cmake -DOPENSSL_ROOT_DIR=${INSTALLDIR} -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=${INSTALLDIR} -S . -B _build && cmake --build _build  && cp _build/lib/oqsprovider.so ${INSTALLDIR}/lib/ossl-modules && sed -i "s/default = default_sect/default = default_sect\noqsprovider = oqsprovider_sect/g" /opt/oqssa/ssl/openssl.cnf && sed -i "s/\[default_sect\]/\[default_sect\]\nactivate = 1\n\[oqsprovider_sect\]\nactivate = 1\n/g" /opt/oqssa/ssl/openssl.cnf && sed -i "s/providers = provider_sect/providers = provider_sect\nssl_conf = ssl_sect\n\n\[ssl_sect\]\nsystem_default = system_default_sect\n\n\[system_default_sect\]\nGroups = \$ENV\:\:DEFAULT_GROUPS\n/g" /opt/oqssa/ssl/openssl.cnf && sed -i "s/\# Use this in order to automatically load providers/\# Set default KEM groups if not set via environment variable\nKDEFAULT_GROUPS = $DEFAULT_GROUPS\n\n# Use this in order to automatically load providers/g" /opt/oqssa/ssl/openssl.cnf && sed -i "s/HOME\t\t\t= ./HOME\t\t= .\nDEFAULT_GROUPS\t= ${DEFAULT_GROUPS}/g" /opt/oqssa/ssl/openssl.cnf
 
 # generate certificates for openssl s_server, which is what we will test curl against
 ENV OPENSSL=${INSTALLDIR}/bin/openssl
@@ -90,7 +90,7 @@ RUN wget https://letsencrypt.org/certs/isrgrootx1.pem -O oqs-bundle.pem && cat $
 # For curl debugging enable it by adding the line below to the configure command:
 #                    --enable-debug \
 
-RUN env LDFLAGS=-Wl,-R${INSTALLDIR}/lib64  \
+RUN env LDFLAGS=-Wl,-R${INSTALLDIR}/lib  \
         ./configure --prefix=${INSTALLDIR} \
                     --with-ca-bundle=${INSTALLDIR}/oqs-bundle.pem \
                     --with-ssl=${INSTALLDIR} && \
@@ -107,7 +107,7 @@ COPY serverstart.sh ${INSTALLDIR}/bin
 CMD ["serverstart.sh"]
 
 ## second stage: Only create minimal image without build tooling and intermediate build results generated above:
-FROM alpine:3.11 as dev
+FROM arm32v7/alpine:3.11 as dev
 # Take in all global args
 ARG INSTALLDIR
 ARG SIG_ALG
@@ -141,7 +141,7 @@ ARG INSTALLDIR
 WORKDIR /
 
 # Improve size some more: liboqs.a not needed during operation
-RUN rm ${INSTALLDIR}/lib64/liboqs*
+RUN rm ${INSTALLDIR}/lib/liboqs*
 
 # Enable a normal user to create new server keys off set CA
 RUN addgroup -g 1000 -S oqs && adduser --uid 1000 -S oqs -G oqs && chown -R oqs.oqs /opt/test && chmod go+r ${INSTALLDIR}/bin/CA.key && chmod go+w ${INSTALLDIR}/bin/CA.srl
